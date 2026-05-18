@@ -1,0 +1,40 @@
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <groupId>comp1020</groupId>
+    <artifactId>music-library-management-system</artifactId>
+    <version>8.0.0</version>
+    <name>Music Library Management System</name>
+
+    <properties>
+        <maven.compiler.source>21</maven.compiler.source>
+        <maven.compiler.target>21</maven.compiler.target>
+        <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+    </properties>
+
+    <dependencies>
+        <!--
+            Jaudiotagger reads metadata from MP3 files.
+            In this project we use it for title, artist, and duration.
+            Maven downloads this automatically when the project builds.
+        -->
+        <dependency>
+            <groupId>net.jthink</groupId>
+            <artifactId>jaudiotagger</artifactId>
+            <version>3.0.1</version>
+        </dependency>
+
+        <!--
+            JLayer plays MP3 files in Java.
+            We use JLayer decoder classes for real playback, frame-based pause/resume,
+            shuffle/repeat, and approximate playback time.
+        -->
+        <dependency>
+            <groupId>javazoom</groupId>
+            <artifactId>jlayer</artifactId>
+            <version>1.0.1</version>
+        </dependency>
+    </dependencies>
+</project>
