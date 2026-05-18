@@ -1,4 +1,4 @@
-# Music Library Management System - Version 8
+# Music Library Management System
 
 A beginner-friendly Java Swing desktop application for managing and playing an MP3 music library.
 
