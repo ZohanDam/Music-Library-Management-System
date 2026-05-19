@@ -11,8 +11,10 @@ import java.util.List;
 
 import manager.MusicLibrary;
 import manager.PlaylistManager;
+import model.ManualPlaylist;
 import model.Playlist;
 import model.Song;
+import model.SmartPlaylist;
 
 /**
  * FileStorage saves and loads songs/playlists using simple text files.
@@ -91,11 +93,17 @@ public class FileStorage {
     /**
      * Saves all playlists to data/playlists.txt.
      *
-     * Each line stores one playlist:
-     * encodedPlaylistName|encodedSongPath1|encodedSongPath2|...
+     * Manual playlist line:
+     * encodedType|encodedPlaylistName|encodedSongPath1|encodedSongPath2|...
      *
-     * We store song paths instead of full song details because songs are already
-     * saved in songs.txt. When loading, each path is matched back to a Song object.
+     * Smart playlist line:
+     * encodedType|encodedPlaylistName|encodedRuleField|encodedKeyword
+     *
+     * Manual playlists store song paths because songs are already saved in
+     * songs.txt.
+     *
+     * Smart playlists store only their rule. When the app loads, the playlist
+     * builds its song list again from the current music library.
      */
     public void savePlaylists(PlaylistManager playlistManager) {
         ensureDataFolderExists();
@@ -103,14 +111,11 @@ public class FileStorage {
         ArrayList<String> lines = new ArrayList<>();
 
         for (Playlist playlist : playlistManager.getAllPlaylists()) {
-            StringBuilder line = new StringBuilder();
-            line.append(encode(playlist.getName()));
+            String line = convertPlaylistToSaveLine(playlist);
 
-            for (Song song : playlist.getSongs()) {
-                line.append("|").append(encode(song.getFilePath()));
+            if (line != null) {
+                lines.add(line);
             }
-
-            lines.add(line.toString());
         }
 
         writeLinesSafely(PLAYLISTS_FILE, lines);
@@ -200,27 +205,114 @@ public class FileStorage {
         }
 
         try {
-            String playlistName = decode(parts[0]);
+            String firstValue = decode(parts[0]);
 
-            if (playlistName.isBlank()) {
-                return null;
+            if ("MANUAL".equalsIgnoreCase(firstValue)) {
+                return parseManualPlaylistLine(parts, musicLibrary);
             }
 
-            Playlist playlist = new Playlist(playlistName);
-
-            for (int i = 1; i < parts.length; i++) {
-                String filePath = decode(parts[i]);
-                Song song = musicLibrary.findSongByFilePath(filePath);
-
-                if (song != null) {
-                    playlist.addSong(song);
-                }
+            if ("SMART".equalsIgnoreCase(firstValue)) {
+                return parseSmartPlaylistLine(parts, musicLibrary);
             }
 
-            return playlist;
+            return parseLegacyManualPlaylistLine(parts, musicLibrary);
         } catch (Exception exception) {
             return null;
         }
+    }
+
+    private String convertPlaylistToSaveLine(Playlist playlist) {
+        if (playlist == null) {
+            return null;
+        }
+
+        if (playlist instanceof SmartPlaylist) {
+            SmartPlaylist smartPlaylist = (SmartPlaylist) playlist;
+
+            return encode(smartPlaylist.getPlaylistType()) + "|"
+                    + encode(smartPlaylist.getName()) + "|"
+                    + encode(smartPlaylist.getRuleField().name()) + "|"
+                    + encode(smartPlaylist.getKeyword());
+        }
+
+        StringBuilder line = new StringBuilder();
+        line.append(encode(playlist.getPlaylistType()));
+        line.append("|").append(encode(playlist.getName()));
+
+        for (Song song : playlist.getSongs()) {
+            line.append("|").append(encode(song.getFilePath()));
+        }
+
+        return line.toString();
+    }
+
+    private Playlist parseManualPlaylistLine(String[] parts, MusicLibrary musicLibrary) {
+        if (parts.length < 2) {
+            return null;
+        }
+
+        String playlistName = decode(parts[1]);
+
+        if (playlistName.isBlank()) {
+            return null;
+        }
+
+        ManualPlaylist playlist = new ManualPlaylist(playlistName);
+
+        for (int i = 2; i < parts.length; i++) {
+            String filePath = decode(parts[i]);
+            Song song = musicLibrary.findSongByFilePath(filePath);
+
+            if (song != null) {
+                playlist.addSong(song);
+            }
+        }
+
+        return playlist;
+    }
+
+    private Playlist parseSmartPlaylistLine(String[] parts, MusicLibrary musicLibrary) {
+        if (parts.length != 4) {
+            return null;
+        }
+
+        String playlistName = decode(parts[1]);
+        String ruleFieldText = decode(parts[2]);
+        String keyword = decode(parts[3]);
+
+        if (playlistName.isBlank() || keyword.isBlank()) {
+            return null;
+        }
+
+        SmartPlaylist.RuleField ruleField = SmartPlaylist.RuleField.valueOf(ruleFieldText);
+        return new SmartPlaylist(playlistName, musicLibrary, ruleField, keyword);
+    }
+
+    /**
+     * Older versions saved playlists as:
+     * encodedPlaylistName|encodedSongPath1|encodedSongPath2|...
+     *
+     * This helper keeps those older save files working.
+     */
+    private Playlist parseLegacyManualPlaylistLine(String[] parts, MusicLibrary musicLibrary) {
+        String playlistName = decode(parts[0]);
+
+        if (playlistName.isBlank()) {
+            return null;
+        }
+
+        ManualPlaylist playlist = new ManualPlaylist(playlistName);
+
+        for (int i = 1; i < parts.length; i++) {
+            String filePath = decode(parts[i]);
+            Song song = musicLibrary.findSongByFilePath(filePath);
+
+            if (song != null) {
+                playlist.addSong(song);
+            }
+        }
+
+        return playlist;
     }
 
     private void ensureDataFolderExists() {

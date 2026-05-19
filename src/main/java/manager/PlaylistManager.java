@@ -3,8 +3,10 @@ package manager;
 import java.util.ArrayList;
 import java.util.List;
 
+import model.ManualPlaylist;
 import model.Playlist;
 import model.Song;
+import model.SmartPlaylist;
 
 /**
  * PlaylistManager stores and manages all playlists.
@@ -24,14 +26,18 @@ public class PlaylistManager {
     }
 
     /**
-     * Creates a new playlist.
+     * Creates a new manual playlist.
      *
-     * Rules:
-     * - playlist name cannot be empty
-     * - duplicate playlist names are not allowed
-     * - comparison is case-insensitive
+     * This method is kept so older code can still call createPlaylist().
      */
     public boolean createPlaylist(String name) {
+        return createManualPlaylist(name);
+    }
+
+    /**
+     * Creates a normal playlist where users manually add and remove songs.
+     */
+    public boolean createManualPlaylist(String name) {
         if (name == null || name.trim().isEmpty()) {
             return false;
         }
@@ -40,7 +46,35 @@ public class PlaylistManager {
             return false;
         }
 
-        playlists.add(new Playlist(name.trim()));
+        playlists.add(new ManualPlaylist(name.trim()));
+        return true;
+    }
+
+    /**
+     * Creates a smart playlist.
+     *
+     * Smart playlists do not store songs directly. They use a simple rule to
+     * collect matching songs from the main music library.
+     */
+    public boolean createSmartPlaylist(
+            String name,
+            MusicLibrary musicLibrary,
+            SmartPlaylist.RuleField ruleField,
+            String keyword
+    ) {
+        if (name == null || name.trim().isEmpty()) {
+            return false;
+        }
+
+        if (musicLibrary == null || ruleField == null || keyword == null || keyword.trim().isEmpty()) {
+            return false;
+        }
+
+        if (findPlaylistByName(name) != null) {
+            return false;
+        }
+
+        playlists.add(new SmartPlaylist(name.trim(), musicLibrary, ruleField, keyword.trim()));
         return true;
     }
 

@@ -1,26 +1,28 @@
 package model;
 
-import java.util.ArrayList;
 import java.util.List;
 
 /**
- * The Playlist class represents ONE playlist.
+ * Playlist is now an abstract parent class.
  *
- * A playlist has:
- * - a name
- * - a list of songs
+ * Beginner idea:
+ * - All playlists have some shared information such as a name.
+ * - But not all playlists behave the same way.
+ * - A manual playlist stores songs that the user adds.
+ * - A smart playlist calculates songs automatically from a rule.
  *
- * Data structure used:
- * - ArrayList<Song>
+ * This is a simple example of inheritance and polymorphism:
+ * - ManualPlaylist extends Playlist
+ * - SmartPlaylist extends Playlist
+ * - Other classes can work with Playlist variables and let each subclass decide
+ *   how getSongs(), addSong(), and removeSong() should behave.
  */
-public class Playlist {
+public abstract class Playlist {
 
     private String name;
-    private ArrayList<Song> songs;
 
     public Playlist(String name) {
-        this.name = name;
-        this.songs = new ArrayList<>();
+        this.name = name == null ? "" : name.trim();
     }
 
     public String getName() {
@@ -28,52 +30,27 @@ public class Playlist {
     }
 
     public void setName(String name) {
-        this.name = name;
+        this.name = name == null ? "" : name.trim();
     }
 
     /**
-     * Adds a song to the playlist.
-     *
-     * Return value:
-     * - true means the song was added
-     * - false means the song was not added
-     *
-     * The song is not added if:
-     * - the song is null
-     * - the song already exists in the playlist
+     * Returns a short save-friendly type name such as MANUAL or SMART.
      */
-    public boolean addSong(Song song) {
-        if (song == null) {
-            return false;
-        }
-
-        if (songs.contains(song)) {
-            return false;
-        }
-
-        songs.add(song);
-        return true;
-    }
+    public abstract String getPlaylistType();
 
     /**
-     * Removes a song from the playlist.
+     * Returns true if the user can directly add/remove songs in this playlist.
      */
-    public boolean removeSong(Song song) {
-        return songs.remove(song);
-    }
+    public abstract boolean isEditable();
 
-    /**
-     * Returns a copy of the song list.
-     *
-     * Beginner note:
-     * Returning a copy protects the real ArrayList inside this class.
-     */
-    public List<Song> getSongs() {
-        return new ArrayList<>(songs);
-    }
+    public abstract boolean addSong(Song song);
+
+    public abstract boolean removeSong(Song song);
+
+    public abstract List<Song> getSongs();
 
     public boolean containsSong(Song song) {
-        return songs.contains(song);
+        return getSongs().contains(song);
     }
 
     /**

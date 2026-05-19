@@ -72,6 +72,7 @@ public class MainFrame extends JFrame {
         );
 
         playlistPanel = new PlaylistPanel(
+                musicLibrary,
                 playlistManager,
                 () -> songPanel.getSelectedSong(),
                 () -> saveDataAndRefreshPanels()

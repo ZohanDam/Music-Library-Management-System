@@ -17,9 +17,11 @@ import javax.swing.JSplitPane;
 import javax.swing.ListSelectionModel;
 import javax.swing.border.EmptyBorder;
 
+import manager.MusicLibrary;
 import manager.PlaylistManager;
 import model.Playlist;
 import model.Song;
+import model.SmartPlaylist;
 
 /**
  * PlaylistPanel is the GUI section for playlist actions.
@@ -38,6 +40,7 @@ import model.Song;
  */
 public class PlaylistPanel extends JPanel {
 
+    private MusicLibrary musicLibrary;
     private PlaylistManager playlistManager;
 
     // Supplier<Song> means this panel can ask another panel for the selected song.
@@ -52,16 +55,19 @@ public class PlaylistPanel extends JPanel {
 
     private DefaultListModel<Song> playlistSongListModel;
     private JList<Song> playlistSongList;
+    private JLabel playlistDetailsLabel;
 
     private JButton createPlaylistButton;
     private JButton addSongButton;
     private JButton removeSongButton;
 
     public PlaylistPanel(
+            MusicLibrary musicLibrary,
             PlaylistManager playlistManager,
             Supplier<Song> selectedSongSupplier,
             Runnable dataChangeHandler
     ) {
+        this.musicLibrary = musicLibrary;
         this.playlistManager = playlistManager;
         this.selectedSongSupplier = selectedSongSupplier;
         this.dataChangeHandler = dataChangeHandler;
@@ -93,6 +99,8 @@ public class PlaylistPanel extends JPanel {
         JPanel playlistSongsPanel = new JPanel(new BorderLayout(4, 4));
         playlistSongsPanel.add(new JLabel("Songs in selected playlist"), BorderLayout.NORTH);
         playlistSongsPanel.add(new JScrollPane(playlistSongList), BorderLayout.CENTER);
+        playlistDetailsLabel = new JLabel("Select a playlist to view its details.");
+        playlistSongsPanel.add(playlistDetailsLabel, BorderLayout.SOUTH);
         playlistSongsPanel.setBorder(BorderFactory.createTitledBorder("Playlist Songs"));
 
         JSplitPane splitPane = new JSplitPane(
@@ -129,9 +137,9 @@ public class PlaylistPanel extends JPanel {
         addSongButton = new JButton("Add Selected Song");
         removeSongButton = new JButton("Remove From Playlist");
 
-        createPlaylistButton.setToolTipText("Create a new empty playlist.");
-        addSongButton.setToolTipText("Add the selected library song to the selected playlist.");
-        removeSongButton.setToolTipText("Remove the selected song from this playlist only.");
+        createPlaylistButton.setToolTipText("Create a manual playlist or a smart playlist.");
+        addSongButton.setToolTipText("Add the selected library song to the selected manual playlist.");
+        removeSongButton.setToolTipText("Remove the selected song from this manual playlist only.");
 
         buttonPanel.add(createPlaylistButton);
         buttonPanel.add(addSongButton);
@@ -145,26 +153,39 @@ public class PlaylistPanel extends JPanel {
     }
 
     private void createPlaylist() {
-        String name = JOptionPane.showInputDialog(
+        Object[] playlistTypes = { "Manual Playlist", "Smart Playlist" };
+        Object selectedType = JOptionPane.showInputDialog(
                 this,
-                "Enter playlist name:",
+                "Choose playlist type:",
                 "Create Playlist",
-                JOptionPane.PLAIN_MESSAGE
+                JOptionPane.PLAIN_MESSAGE,
+                null,
+                playlistTypes,
+                playlistTypes[0]
         );
+
+        if (selectedType == null) {
+            return;
+        }
+
+        if ("Smart Playlist".equals(selectedType)) {
+            createSmartPlaylist();
+        } else {
+            createManualPlaylist();
+        }
+    }
+
+    private void createManualPlaylist() {
+        String name = askForRequiredText("Enter playlist name:", "Create Manual Playlist");
 
         if (name == null) {
             return;
         }
 
-        boolean created = playlistManager.createPlaylist(name);
+        boolean created = playlistManager.createManualPlaylist(name);
 
         if (!created) {
-            JOptionPane.showMessageDialog(
-                    this,
-                    "Playlist name is empty or already exists.",
-                    "Cannot Create Playlist",
-                    JOptionPane.WARNING_MESSAGE
-            );
+            showCannotCreatePlaylistMessage();
             return;
         }
 
@@ -172,11 +193,120 @@ public class PlaylistPanel extends JPanel {
         saveAfterPlaylistChange();
     }
 
+    private void createSmartPlaylist() {
+        String name = askForRequiredText("Enter playlist name:", "Create Smart Playlist");
+
+        if (name == null) {
+            return;
+        }
+
+        SmartPlaylist.RuleField ruleField = askForSmartRuleField();
+
+        if (ruleField == null) {
+            return;
+        }
+
+        String targetText;
+
+        if (ruleField == SmartPlaylist.RuleField.ARTIST) {
+            targetText = "Enter the artist text to match:";
+        } else {
+            targetText = "Enter the title text to match:";
+        }
+
+        String keyword = askForRequiredText(targetText, "Create Smart Playlist");
+
+        if (keyword == null) {
+            return;
+        }
+
+        boolean created = playlistManager.createSmartPlaylist(name, musicLibrary, ruleField, keyword);
+
+        if (!created) {
+            showCannotCreatePlaylistMessage();
+            return;
+        }
+
+        refreshPlaylists();
+        saveAfterPlaylistChange();
+    }
+
+    private String askForRequiredText(String message, String title) {
+        while (true) {
+            String text = JOptionPane.showInputDialog(
+                    this,
+                    message,
+                    title,
+                    JOptionPane.PLAIN_MESSAGE
+            );
+
+            if (text == null) {
+                return null;
+            }
+
+            String trimmedText = text.trim();
+
+            if (!trimmedText.isEmpty()) {
+                return trimmedText;
+            }
+
+            JOptionPane.showMessageDialog(
+                    this,
+                    "This field cannot be empty.",
+                    "Missing Information",
+                    JOptionPane.WARNING_MESSAGE
+            );
+        }
+    }
+
+    private SmartPlaylist.RuleField askForSmartRuleField() {
+        Object[] ruleOptions = { "Artist contains", "Title contains" };
+        Object selectedRule = JOptionPane.showInputDialog(
+                this,
+                "Choose a smart rule:",
+                "Create Smart Playlist",
+                JOptionPane.PLAIN_MESSAGE,
+                null,
+                ruleOptions,
+                ruleOptions[0]
+        );
+
+        if (selectedRule == null) {
+            return null;
+        }
+
+        if ("Artist contains".equals(selectedRule)) {
+            return SmartPlaylist.RuleField.ARTIST;
+        }
+
+        return SmartPlaylist.RuleField.TITLE;
+    }
+
+    private void showCannotCreatePlaylistMessage() {
+        JOptionPane.showMessageDialog(
+                this,
+                "Playlist name is empty, keyword is missing, or the name already exists.",
+                "Cannot Create Playlist",
+                JOptionPane.WARNING_MESSAGE
+        );
+    }
+
     private void addSelectedSongToPlaylist() {
         Playlist selectedPlaylist = getSelectedPlaylist();
         Song selectedSong = selectedSongSupplier.get();
 
         if (selectedPlaylist == null || selectedSong == null) {
+            return;
+        }
+
+        if (!selectedPlaylist.isEditable()) {
+            JOptionPane.showMessageDialog(
+                    this,
+                    "Smart playlists update automatically from their rule.\n"
+                            + "You cannot add songs manually.",
+                    "Smart Playlist",
+                    JOptionPane.INFORMATION_MESSAGE
+            );
             return;
         }
 
@@ -202,6 +332,17 @@ public class PlaylistPanel extends JPanel {
         Song selectedPlaylistSong = playlistSongList.getSelectedValue();
 
         if (selectedPlaylist == null || selectedPlaylistSong == null) {
+            return;
+        }
+
+        if (!selectedPlaylist.isEditable()) {
+            JOptionPane.showMessageDialog(
+                    this,
+                    "Smart playlists update automatically from their rule.\n"
+                            + "You cannot remove songs manually.",
+                    "Smart Playlist",
+                    JOptionPane.INFORMATION_MESSAGE
+            );
             return;
         }
 
@@ -242,6 +383,7 @@ public class PlaylistPanel extends JPanel {
         playlistSongListModel.clear();
 
         Playlist selectedPlaylist = getSelectedPlaylist();
+        updatePlaylistDetailsLabel(selectedPlaylist);
 
         if (selectedPlaylist == null) {
             return;
@@ -254,6 +396,21 @@ public class PlaylistPanel extends JPanel {
 
     private Playlist getSelectedPlaylist() {
         return playlistList.getSelectedValue();
+    }
+
+    private void updatePlaylistDetailsLabel(Playlist selectedPlaylist) {
+        if (selectedPlaylist == null) {
+            playlistDetailsLabel.setText("Select a playlist to view its details.");
+            return;
+        }
+
+        if (selectedPlaylist instanceof SmartPlaylist) {
+            SmartPlaylist smartPlaylist = (SmartPlaylist) selectedPlaylist;
+            playlistDetailsLabel.setText("Smart rule: " + smartPlaylist.getRuleSummary());
+            return;
+        }
+
+        playlistDetailsLabel.setText("Manual playlist: songs are added and removed by the user.");
     }
 
     /**
@@ -273,11 +430,13 @@ public class PlaylistPanel extends JPanel {
      * This prevents many beginner-level user errors.
      */
     public void updateButtonStates() {
-        boolean hasSelectedPlaylist = getSelectedPlaylist() != null;
+        Playlist selectedPlaylist = getSelectedPlaylist();
+        boolean hasSelectedPlaylist = selectedPlaylist != null;
         boolean hasSelectedLibrarySong = selectedSongSupplier.get() != null;
         boolean hasSelectedPlaylistSong = playlistSongList.getSelectedValue() != null;
+        boolean canEditSelectedPlaylist = hasSelectedPlaylist && selectedPlaylist.isEditable();
 
-        addSongButton.setEnabled(hasSelectedPlaylist && hasSelectedLibrarySong);
-        removeSongButton.setEnabled(hasSelectedPlaylist && hasSelectedPlaylistSong);
+        addSongButton.setEnabled(canEditSelectedPlaylist && hasSelectedLibrarySong);
+        removeSongButton.setEnabled(canEditSelectedPlaylist && hasSelectedPlaylistSong);
     }
 }
