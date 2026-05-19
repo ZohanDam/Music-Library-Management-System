@@ -58,6 +58,7 @@ public class PlaylistPanel extends JPanel {
     private JLabel playlistDetailsLabel;
 
     private JButton createPlaylistButton;
+    private JButton deletePlaylistButton;
     private JButton addSongButton;
     private JButton removeSongButton;
 
@@ -134,20 +135,24 @@ public class PlaylistPanel extends JPanel {
         buttonPanel.setBorder(BorderFactory.createTitledBorder("Playlist Actions"));
 
         createPlaylistButton = new JButton("Create Playlist");
+        deletePlaylistButton = new JButton("Delete Playlist");
         addSongButton = new JButton("Add Selected Song");
         removeSongButton = new JButton("Remove From Playlist");
 
         createPlaylistButton.setToolTipText("Create a manual playlist or a smart playlist.");
+        deletePlaylistButton.setToolTipText("Delete the selected playlist.");
         addSongButton.setToolTipText("Add the selected library song to the selected manual playlist.");
         removeSongButton.setToolTipText("Remove the selected song from this manual playlist only.");
 
         buttonPanel.add(createPlaylistButton);
+        buttonPanel.add(deletePlaylistButton);
         buttonPanel.add(addSongButton);
         buttonPanel.add(removeSongButton);
 
         add(buttonPanel, BorderLayout.SOUTH);
 
         createPlaylistButton.addActionListener(event -> createPlaylist());
+        deletePlaylistButton.addActionListener(event -> deleteSelectedPlaylist());
         addSongButton.addActionListener(event -> addSelectedSongToPlaylist());
         removeSongButton.addActionListener(event -> removeSelectedSongFromPlaylist());
     }
@@ -289,6 +294,42 @@ public class PlaylistPanel extends JPanel {
                 "Cannot Create Playlist",
                 JOptionPane.WARNING_MESSAGE
         );
+    }
+
+    private void deleteSelectedPlaylist() {
+        Playlist selectedPlaylist = getSelectedPlaylist();
+
+        if (selectedPlaylist == null) {
+            return;
+        }
+
+        int choice = JOptionPane.showConfirmDialog(
+                this,
+                "Delete this playlist?\n\n" + selectedPlaylist.getName(),
+                "Delete Playlist",
+                JOptionPane.YES_NO_OPTION,
+                JOptionPane.WARNING_MESSAGE
+        );
+
+        if (choice != JOptionPane.YES_OPTION) {
+            return;
+        }
+
+        boolean deleted = playlistManager.deletePlaylist(selectedPlaylist);
+
+        if (!deleted) {
+            JOptionPane.showMessageDialog(
+                    this,
+                    "The selected playlist could not be deleted.",
+                    "Delete Failed",
+                    JOptionPane.ERROR_MESSAGE
+            );
+            return;
+        }
+
+        refreshPlaylists();
+        refreshSelectedPlaylistSongs();
+        saveAfterPlaylistChange();
     }
 
     private void addSelectedSongToPlaylist() {
@@ -436,6 +477,7 @@ public class PlaylistPanel extends JPanel {
         boolean hasSelectedPlaylistSong = playlistSongList.getSelectedValue() != null;
         boolean canEditSelectedPlaylist = hasSelectedPlaylist && selectedPlaylist.isEditable();
 
+        deletePlaylistButton.setEnabled(hasSelectedPlaylist);
         addSongButton.setEnabled(canEditSelectedPlaylist && hasSelectedLibrarySong);
         removeSongButton.setEnabled(canEditSelectedPlaylist && hasSelectedPlaylistSong);
     }
