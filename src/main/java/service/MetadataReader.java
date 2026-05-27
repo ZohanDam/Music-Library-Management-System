@@ -52,7 +52,6 @@ public class MetadataReader {
 
             return new MetadataInfo(title, artist, durationSeconds);
         } catch (Exception exception) {
-            // Beginner note:
             // We do not show a big error here because missing/broken metadata is common.
             // The GUI will simply ask the user to type the missing information.
             return new MetadataInfo("", "", 0);

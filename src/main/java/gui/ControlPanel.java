@@ -41,6 +41,7 @@ public class ControlPanel extends JPanel {
     private MusicPlayer musicPlayer;
     private Supplier<Song> selectedSongSupplier;
     private Supplier<List<Song>> displayedSongsSupplier;
+    private Runnable playbackStateChangeHandler;
 
     private JButton previousButton;
     private JButton playButton;
@@ -55,11 +56,13 @@ public class ControlPanel extends JPanel {
     public ControlPanel(
             MusicPlayer musicPlayer,
             Supplier<Song> selectedSongSupplier,
-            Supplier<List<Song>> displayedSongsSupplier
+            Supplier<List<Song>> displayedSongsSupplier,
+            Runnable playbackStateChangeHandler
     ) {
         this.musicPlayer = musicPlayer;
         this.selectedSongSupplier = selectedSongSupplier;
         this.displayedSongsSupplier = displayedSongsSupplier;
+        this.playbackStateChangeHandler = playbackStateChangeHandler;
 
         setLayout(new BorderLayout(8, 8));
         setBorder(BorderFactory.createCompoundBorder(
@@ -78,6 +81,10 @@ public class ControlPanel extends JPanel {
         musicPlayer.setStateChangeHandler(() -> SwingUtilities.invokeLater(() -> {
             updateStatusLabels();
             updateButtonStates();
+
+            if (playbackStateChangeHandler != null) {
+                playbackStateChangeHandler.run();
+            }
         }));
 
         updateButtonStates();

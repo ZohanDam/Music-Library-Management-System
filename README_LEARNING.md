@@ -10,6 +10,7 @@ This is a Java Swing desktop app for:
 - reading metadata
 - storing songs in a library
 - creating playlists
+- deleting playlists
 - creating smart playlists
 - playing MP3 files
 - saving and loading data
@@ -216,6 +217,7 @@ Handles playlist-side actions:
 
 - create manual playlists
 - create smart playlists
+- delete playlists
 - show playlist songs
 - show smart-playlist rule summary
 - add/remove songs for manual playlists

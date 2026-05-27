@@ -2,6 +2,7 @@ package gui;
 
 import java.awt.BorderLayout;
 import java.awt.GridLayout;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.function.Supplier;
 
@@ -43,9 +44,8 @@ public class PlaylistPanel extends JPanel {
     private MusicLibrary musicLibrary;
     private PlaylistManager playlistManager;
 
-    // Supplier<Song> means this panel can ask another panel for the selected song.
-    // In this project, it asks SongPanel for the selected song.
-    private Supplier<Song> selectedSongSupplier;
+    // This panel asks SongPanel for the selected library songs.
+    private Supplier<List<Song>> selectedSongsSupplier;
 
     // Called when playlist data changes so MainFrame can save the data.
     private Runnable dataChangeHandler;
@@ -61,16 +61,17 @@ public class PlaylistPanel extends JPanel {
     private JButton deletePlaylistButton;
     private JButton addSongButton;
     private JButton removeSongButton;
+    private Runnable selectionChangeHandler;
 
     public PlaylistPanel(
             MusicLibrary musicLibrary,
             PlaylistManager playlistManager,
-            Supplier<Song> selectedSongSupplier,
+            Supplier<List<Song>> selectedSongsSupplier,
             Runnable dataChangeHandler
     ) {
         this.musicLibrary = musicLibrary;
         this.playlistManager = playlistManager;
-        this.selectedSongSupplier = selectedSongSupplier;
+        this.selectedSongsSupplier = selectedSongsSupplier;
         this.dataChangeHandler = dataChangeHandler;
 
         setLayout(new BorderLayout(8, 8));
@@ -119,12 +120,20 @@ public class PlaylistPanel extends JPanel {
             if (!event.getValueIsAdjusting()) {
                 refreshSelectedPlaylistSongs();
                 updateButtonStates();
+
+                if (selectionChangeHandler != null) {
+                    selectionChangeHandler.run();
+                }
             }
         });
 
         playlistSongList.addListSelectionListener(event -> {
             if (!event.getValueIsAdjusting()) {
                 updateButtonStates();
+
+                if (selectionChangeHandler != null) {
+                    selectionChangeHandler.run();
+                }
             }
         });
     }
@@ -141,7 +150,7 @@ public class PlaylistPanel extends JPanel {
 
         createPlaylistButton.setToolTipText("Create a manual playlist or a smart playlist.");
         deletePlaylistButton.setToolTipText("Delete the selected playlist.");
-        addSongButton.setToolTipText("Add the selected library song to the selected manual playlist.");
+        addSongButton.setToolTipText("Add the selected library song or songs to the selected manual playlist.");
         removeSongButton.setToolTipText("Remove the selected song from this manual playlist only.");
 
         buttonPanel.add(createPlaylistButton);
@@ -334,9 +343,9 @@ public class PlaylistPanel extends JPanel {
 
     private void addSelectedSongToPlaylist() {
         Playlist selectedPlaylist = getSelectedPlaylist();
-        Song selectedSong = selectedSongSupplier.get();
+        List<Song> selectedSongs = selectedSongsSupplier.get();
 
-        if (selectedPlaylist == null || selectedSong == null) {
+        if (selectedPlaylist == null || selectedSongs == null || selectedSongs.isEmpty()) {
             return;
         }
 
@@ -351,17 +360,35 @@ public class PlaylistPanel extends JPanel {
             return;
         }
 
-        boolean added = selectedPlaylist.addSong(selectedSong);
+        int addedCount = 0;
+        int duplicateCount = 0;
 
-        if (!added) {
+        for (Song selectedSong : new ArrayList<>(selectedSongs)) {
+            if (selectedPlaylist.addSong(selectedSong)) {
+                addedCount++;
+            } else {
+                duplicateCount++;
+            }
+        }
+
+        if (addedCount == 0) {
             JOptionPane.showMessageDialog(
                     this,
-                    "This song is already in the selected playlist.",
+                    "The selected song or songs are already in the selected playlist.",
                     "Duplicate Song",
                     JOptionPane.INFORMATION_MESSAGE
             );
         } else {
             saveAfterPlaylistChange();
+
+            if (duplicateCount > 0) {
+                JOptionPane.showMessageDialog(
+                        this,
+                        "Added: " + addedCount + "\nAlready in playlist: " + duplicateCount,
+                        "Add To Playlist",
+                        JOptionPane.INFORMATION_MESSAGE
+                );
+            }
         }
 
         refreshSelectedPlaylistSongs();
@@ -473,12 +500,40 @@ public class PlaylistPanel extends JPanel {
     public void updateButtonStates() {
         Playlist selectedPlaylist = getSelectedPlaylist();
         boolean hasSelectedPlaylist = selectedPlaylist != null;
-        boolean hasSelectedLibrarySong = selectedSongSupplier.get() != null;
+        boolean hasSelectedLibrarySong = selectedSongsSupplier.get() != null && !selectedSongsSupplier.get().isEmpty();
         boolean hasSelectedPlaylistSong = playlistSongList.getSelectedValue() != null;
         boolean canEditSelectedPlaylist = hasSelectedPlaylist && selectedPlaylist.isEditable();
 
         deletePlaylistButton.setEnabled(hasSelectedPlaylist);
         addSongButton.setEnabled(canEditSelectedPlaylist && hasSelectedLibrarySong);
         removeSongButton.setEnabled(canEditSelectedPlaylist && hasSelectedPlaylistSong);
+    }
+
+    public Song getSelectedPlaylistSong() {
+        return playlistSongList.getSelectedValue();
+    }
+
+    public List<Song> getDisplayedPlaylistSongs() {
+        return getSelectedPlaylist() == null ? List.of() : getSelectedPlaylist().getSongs();
+    }
+
+    public void clearPlaylistSongSelection() {
+        if (!playlistSongList.isSelectionEmpty()) {
+            playlistSongList.clearSelection();
+        }
+    }
+
+    public void syncPlaylistSongSelectionWithSong(Song song) {
+        if (song == null) {
+            return;
+        }
+
+        if (playlistSongListModel.contains(song)) {
+            playlistSongList.setSelectedValue(song, true);
+        }
+    }
+
+    public void setSelectionChangeHandler(Runnable selectionChangeHandler) {
+        this.selectionChangeHandler = selectionChangeHandler;
     }
 }

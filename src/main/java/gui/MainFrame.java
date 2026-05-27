@@ -74,14 +74,15 @@ public class MainFrame extends JFrame {
         playlistPanel = new PlaylistPanel(
                 musicLibrary,
                 playlistManager,
-                () -> songPanel.getSelectedSong(),
+                () -> songPanel.getSelectedSongs(),
                 () -> saveDataAndRefreshPanels()
         );
 
         controlPanel = new ControlPanel(
                 musicPlayer,
-                () -> songPanel.getSelectedSong(),
-                () -> songPanel.getDisplayedSongs()
+                () -> getPlaybackSelectedSong(),
+                () -> getPlaybackQueue(),
+                () -> syncSongSelectionWithPlayback()
         );
 
         JSplitPane splitPane = new JSplitPane(
@@ -108,6 +109,19 @@ public class MainFrame extends JFrame {
      */
     private void connectPanelUpdates() {
         songPanel.setSelectionChangeHandler(() -> {
+            if (songPanel.getSelectedSong() != null) {
+                playlistPanel.clearPlaylistSongSelection();
+            }
+
+            playlistPanel.updateButtonStates();
+            controlPanel.updateButtonStates();
+        });
+
+        playlistPanel.setSelectionChangeHandler(() -> {
+            if (playlistPanel.getSelectedPlaylistSong() != null) {
+                songPanel.clearSongSelection();
+            }
+
             playlistPanel.updateButtonStates();
             controlPanel.updateButtonStates();
         });
@@ -145,6 +159,36 @@ public class MainFrame extends JFrame {
         if (controlPanel != null) {
             controlPanel.refreshPlaybackDisplay();
         }
+    }
+
+    private void syncSongSelectionWithPlayback() {
+        if (songPanel == null || playlistPanel == null) {
+            return;
+        }
+
+        Song currentSong = musicPlayer.getCurrentSong();
+        songPanel.syncSelectionWithSong(currentSong);
+        playlistPanel.syncPlaylistSongSelectionWithSong(currentSong);
+    }
+
+    private Song getPlaybackSelectedSong() {
+        Song selectedPlaylistSong = playlistPanel.getSelectedPlaylistSong();
+
+        if (selectedPlaylistSong != null) {
+            return selectedPlaylistSong;
+        }
+
+        return songPanel.getSelectedSong();
+    }
+
+    private java.util.List<Song> getPlaybackQueue() {
+        Song selectedPlaylistSong = playlistPanel.getSelectedPlaylistSong();
+
+        if (selectedPlaylistSong != null) {
+            return playlistPanel.getDisplayedPlaylistSongs();
+        }
+
+        return songPanel.getDisplayedSongs();
     }
 
     private void saveDataWhenWindowCloses() {

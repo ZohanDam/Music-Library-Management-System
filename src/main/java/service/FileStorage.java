@@ -23,7 +23,6 @@ import model.SmartPlaylist;
  * - data/songs.txt
  * - data/playlists.txt
  *
- * Beginner explanation:
  * Without saving, every imported song disappears when the app closes.
  * This class writes the important data to files and reads it again on startup.
  */

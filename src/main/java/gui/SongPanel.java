@@ -2,6 +2,8 @@ package gui;
 
 import java.awt.BorderLayout;
 import java.awt.GridLayout;
+import java.awt.event.MouseAdapter;
+import java.awt.event.MouseEvent;
 import java.io.File;
 import java.util.ArrayList;
 import java.util.List;
@@ -66,6 +68,16 @@ public class SongPanel extends JPanel {
     private Consumer<Song> beforeSongDeleteHandler;
     private Runnable selectionChangeHandler;
 
+    private static class FileNameGuess {
+        private String title;
+        private String artist;
+
+        private FileNameGuess(String title, String artist) {
+            this.title = title;
+            this.artist = artist;
+        }
+    }
+
     public SongPanel(
             MusicLibrary musicLibrary,
             MetadataReader metadataReader,
@@ -127,8 +139,8 @@ public class SongPanel extends JPanel {
 
         searchField.setToolTipText("Search by song title or artist.");
         importSongButton.setToolTipText("Import one or more MP3 files into the library.");
-        editSongButton.setToolTipText("Edit the selected song title or artist.");
-        deleteSongButton.setToolTipText("Remove the selected song from the app library only.");
+        editSongButton.setToolTipText("Edit one selected song title or artist.");
+        deleteSongButton.setToolTipText("Remove the selected song or songs from the app library only.");
         sortByTitleButton.setToolTipText("Sort the full library alphabetically by title.");
         sortByArtistButton.setToolTipText("Sort the full library alphabetically by artist.");
 
@@ -154,7 +166,8 @@ public class SongPanel extends JPanel {
     private void createSongListArea() {
         songListModel = new DefaultListModel<>();
         songList = new JList<>(songListModel);
-        songList.setSelectionMode(ListSelectionModel.SINGLE_SELECTION);
+        songList.setSelectionMode(ListSelectionModel.MULTIPLE_INTERVAL_SELECTION);
+        songList.setToolTipText("Use Ctrl to toggle songs and Shift to select a range.");
 
         songList.addListSelectionListener(event -> {
             if (!event.getValueIsAdjusting()) {
@@ -163,6 +176,49 @@ public class SongPanel extends JPanel {
                 if (selectionChangeHandler != null) {
                     selectionChangeHandler.run();
                 }
+            }
+        });
+
+        songList.addMouseListener(new MouseAdapter() {
+            @Override
+            public void mousePressed(MouseEvent event) {
+                if (event.getButton() != MouseEvent.BUTTON1) {
+                    return;
+                }
+
+                int clickedIndex = songList.locationToIndex(event.getPoint());
+
+                if (clickedIndex == -1) {
+                    songList.clearSelection();
+                    return;
+                }
+
+                if (!songList.getCellBounds(clickedIndex, clickedIndex).contains(event.getPoint())) {
+                    songList.clearSelection();
+                    return;
+                }
+
+                ListSelectionModel selectionModel = songList.getSelectionModel();
+                int anchorIndex = selectionModel.getAnchorSelectionIndex();
+                boolean isToggleSelection = event.isControlDown() || event.isMetaDown();
+                boolean isRangeSelection = event.isShiftDown();
+
+                if (isRangeSelection && anchorIndex != -1) {
+                    songList.setSelectionInterval(anchorIndex, clickedIndex);
+                } else if (isToggleSelection) {
+                    if (songList.isSelectedIndex(clickedIndex)) {
+                        songList.removeSelectionInterval(clickedIndex, clickedIndex);
+                    } else {
+                        songList.addSelectionInterval(clickedIndex, clickedIndex);
+                    }
+
+                    selectionModel.setAnchorSelectionIndex(clickedIndex);
+                } else {
+                    songList.setSelectionInterval(clickedIndex, clickedIndex);
+                    selectionModel.setAnchorSelectionIndex(clickedIndex);
+                }
+
+                event.consume();
             }
         });
 
@@ -292,6 +348,10 @@ public class SongPanel extends JPanel {
     }
 
     private void editSelectedSong() {
+        if (getSelectedSongs().size() != 1) {
+            return;
+        }
+
         Song selectedSong = getSelectedSong();
 
         if (selectedSong == null) {
@@ -348,16 +408,26 @@ public class SongPanel extends JPanel {
 
     /** Deletes the selected song from the app library, not from the computer. */
     private void deleteSelectedSong() {
-        Song selectedSong = getSelectedSong();
+        List<Song> selectedSongs = getSelectedSongs();
 
-        if (selectedSong == null) {
+        if (selectedSongs.isEmpty()) {
             return;
+        }
+
+        String message;
+
+        if (selectedSongs.size() == 1) {
+            Song selectedSong = selectedSongs.get(0);
+            message = "Remove this song from the library?\n\n" + selectedSong.getDisplayText()
+                    + "\n\nThe MP3 file on your computer will not be deleted.";
+        } else {
+            message = "Remove " + selectedSongs.size() + " selected songs from the library?\n\n"
+                    + "The MP3 files on your computer will not be deleted.";
         }
 
         int choice = JOptionPane.showConfirmDialog(
                 this,
-                "Remove this song from the library?\n\n" + selectedSong.getDisplayText()
-                        + "\n\nThe MP3 file on your computer will not be deleted.",
+                message,
                 "Delete Song",
                 JOptionPane.YES_NO_OPTION,
                 JOptionPane.WARNING_MESSAGE
@@ -367,13 +437,20 @@ public class SongPanel extends JPanel {
             return;
         }
 
-        if (beforeSongDeleteHandler != null) {
-            beforeSongDeleteHandler.accept(selectedSong);
+        ArrayList<Song> songsToDelete = new ArrayList<>(selectedSongs);
+        int removedCount = 0;
+
+        for (Song selectedSong : songsToDelete) {
+            if (beforeSongDeleteHandler != null) {
+                beforeSongDeleteHandler.accept(selectedSong);
+            }
+
+            if (musicLibrary.removeSong(selectedSong)) {
+                removedCount++;
+            }
         }
 
-        boolean removed = musicLibrary.removeSong(selectedSong);
-
-        if (!removed) {
+        if (removedCount == 0) {
             JOptionPane.showMessageDialog(
                     this,
                     "The selected song could not be removed.",
@@ -397,6 +474,18 @@ public class SongPanel extends JPanel {
             );
         }
 
+        FileNameGuess fileNameGuess = guessSongInfoFromFileName(originalFileName);
+
+        if (!fileNameGuess.title.isBlank() && !fileNameGuess.artist.isBlank()
+                && !"Unknown Artist".equalsIgnoreCase(fileNameGuess.artist)) {
+            return new Song(
+                    fileNameGuess.title,
+                    fileNameGuess.artist,
+                    filePath,
+                    metadataInfo.getDurationSeconds()
+            );
+        }
+
         return askUserForSongInfo(filePath, originalFileName, metadataInfo);
     }
 
@@ -411,14 +500,15 @@ public class SongPanel extends JPanel {
     private Song askUserForSongInfo(String filePath, String originalFileName, MetadataInfo metadataInfo) {
         JTextField titleField = new JTextField(20);
         JTextField artistField = new JTextField(20);
+        FileNameGuess fileNameGuess = guessSongInfoFromFileName(originalFileName);
 
         String defaultTitle = metadataInfo.hasTitle()
                 ? metadataInfo.getTitle()
-                : removeMp3Extension(originalFileName);
+                : fileNameGuess.title;
 
         String defaultArtist = metadataInfo.hasArtist()
                 ? metadataInfo.getArtist()
-                : "Unknown Artist";
+                : fileNameGuess.artist;
 
         titleField.setText(defaultTitle);
         artistField.setText(defaultArtist);
@@ -475,6 +565,37 @@ public class SongPanel extends JPanel {
         return fileName;
     }
 
+    /**
+     * Many files are named like "Artist - Title.mp3".
+     * If metadata is missing, this gives the user a better default guess.
+     */
+    private FileNameGuess guessSongInfoFromFileName(String originalFileName) {
+        String baseName = removeMp3Extension(originalFileName).trim();
+
+        if (baseName.isEmpty()) {
+            return new FileNameGuess("Untitled", "Unknown Artist");
+        }
+
+        String[] delimiters = { " - ", " – ", " — ", "-" };
+
+        for (String delimiter : delimiters) {
+            int separatorIndex = baseName.indexOf(delimiter);
+
+            if (separatorIndex <= 0 || separatorIndex >= baseName.length() - delimiter.length()) {
+                continue;
+            }
+
+            String artist = baseName.substring(0, separatorIndex).trim();
+            String title = baseName.substring(separatorIndex + delimiter.length()).trim();
+
+            if (!artist.isEmpty() && !title.isEmpty()) {
+                return new FileNameGuess(title, artist);
+            }
+        }
+
+        return new FileNameGuess(baseName, "Unknown Artist");
+    }
+
     private void searchSongs() {
         String keyword = searchField.getText();
         List<Song> results = musicLibrary.searchSongs(keyword);
@@ -511,13 +632,33 @@ public class SongPanel extends JPanel {
     }
 
     private void updateButtonStates() {
-        boolean hasSelectedSong = getSelectedSong() != null;
-        editSongButton.setEnabled(hasSelectedSong);
-        deleteSongButton.setEnabled(hasSelectedSong);
+        int selectedCount = getSelectedSongs().size();
+        editSongButton.setEnabled(selectedCount == 1);
+        deleteSongButton.setEnabled(selectedCount > 0);
     }
 
     public Song getSelectedSong() {
         return songList.getSelectedValue();
+    }
+
+    public List<Song> getSelectedSongs() {
+        return new ArrayList<>(songList.getSelectedValuesList());
+    }
+
+    public void clearSongSelection() {
+        if (!songList.isSelectionEmpty()) {
+            songList.clearSelection();
+        }
+    }
+
+    public void syncSelectionWithSong(Song song) {
+        if (song == null) {
+            return;
+        }
+
+        if (songListModel.contains(song)) {
+            songList.setSelectedValue(song, true);
+        }
     }
 
     /** Returns songs currently visible in the list. MusicPlayer uses this for Next/Previous. */

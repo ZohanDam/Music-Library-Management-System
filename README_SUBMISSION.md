@@ -11,6 +11,7 @@ This project is a Java Swing desktop application for managing and playing an MP3
 - edit and delete songs
 - create manual playlists
 - create smart playlists based on title or artist keywords
+- delete playlists
 - play, pause, resume, and skip songs
 - use shuffle and repeat modes
 - save and load songs and playlists automatically
